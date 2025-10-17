@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Stack — Cute Edition</title>
+<style>
+  body {
+    margin: 0;
+    font-family: "Poppins", sans-serif;
+    background: linear-gradient(180deg, #fff5f7 0%, #f1f5ff 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  h1 {
+    margin: 20px 0 5px;
+    color: #ff6f91;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+  }
+
+  #score {
+    font-size: 1.1rem;
+    color: #555;
+    margin-bottom: 10px;
+  }
+
+  #game {
+    position: relative;
+    width: 350px;
+    height: 500px;
+    background: #f9f9fb;
+    border: 4px solid #ffd6d9;
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+
+  .cell {
+    position: absolute;
+    width: 45px;
+    height: 45px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.2rem;
+    transition: transform 0.15s ease;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+  }
+
+  .cell:hover {
+    transform: scale(1.05);
+    cursor: pointer;
+  }
+
+  .special { color: #fff; }
+  .val0 { background: #80d0c7; }
+  .val1 { background: #9ad0f5; }
+  .val2 { background: #f6b26b; color: #fff; }
+  .val3 { background: #f7aef8; color: #fff; }
+  .val4 { background: #c1a3a3; color: #fff; }
+  .val5 { background: #ff9a8b; color: #fff; }
+  .val6 { background: #ffd5cd; color: #444; }
+  .val7 { background: #a9def9; color: #444; }
+  .val8 { background: #c8b6ff; color: #fff; }
+  .val9 { background: #fef6c9; color: #444; }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 1.4rem;
+    color: #444;
+    z-index: 10;
+    visibility: hidden;
+  }
+
+  #overlay.visible { visibility: visible; }
+
+  #overlay button {
+    margin-top: 15px;
+    background: #ff9aa2;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    transition: all 0.2s;
+  }
+
+  #overlay button:hover {
+    background: #ff748c;
+    transform: scale(1.05);
+  }
+</style>
+</head>
+<body>
+
+<h1>Number Stack 💫</h1>
+<div id="score">Score: <span id="scoreVal">0</span></div>
+<div id="game"></div>
+
+<div id="overlay">
+  <div id="message">Game Over!</div>
+  <button id="restartBtn">Restart</button>
+</div>
+
+<script>
+const ROWS = 10, COLS = 7;
+const CELL_SIZE = 48;
+const FALL_SPEED = 3;  // pixels per frame (faster fall)
+const SPAWN_INTERVAL = 900; // ms between new falling numbers
+
+let grid = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+let score = 0;
+let falling = null; // {row, col, value, y}
+let gameOver = false;
+
+const game = document.getElementById('game');
+const overlay = document.getElementById('overlay');
+const message = document.getElementById('message');
+const scoreVal = document.getElementById('scoreVal');
+const restartBtn = document.getElementById('restartBtn');
+
+restartBtn.addEventListener('click', restart);
+
+function restart() {
+  grid = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  score = 0;
+  falling = null;
+  gameOver = false;
+  overlay.classList.remove('visible');
+  scoreVal.textContent = score;
+  render();
+}
+
+function spawnNumber() {
+  if (gameOver) return;
+  const col = Math.floor(Math.random() * COLS);
+  if (grid[0][col] !== null) {
+    endGame();
+    return;
+  }
+  falling = {col, y: 0, value: Math.floor(Math.random() * 10)};
+}
+
+function endGame() {
+  gameOver = true;
+  message.textContent = "Game Over 💔 Score: " + score;
+  overlay.classList.add('visible');
+}
+
+function applyGravity() {
+  for (let c = 0; c < COLS; c++) {
+    const stack = grid.map(r => r[c]).filter(v => v !== null);
+    for (let r = ROWS - 1; r >= 0; r--) {
+      grid[r][c] = stack.pop() ?? null;
+    }
+  }
+}
+
+function findGroup(r, c) {
+  const val = grid[r][c];
+  if (![0,1].includes(val)) return [];
+  const visited = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  const q = [[r,c]];
+  const group = [];
+  visited[r][c] = true;
+  while (q.length) {
+    const [cr, cc] = q.shift();
+    group.push([cr,cc]);
+    for (const [dr, dc] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nr = cr + dr, nc = cc + dc;
+      if (nr>=0 && nr<ROWS && nc>=0 && nc<COLS && !visited[nr][nc] && grid[nr][nc]===val) {
+        visited[nr][nc] = true;
+        q.push([nr,nc]);
+      }
+    }
+  }
+  return group;
+}
+
+function smash(r, c) {
+  if (gameOver) return;
+  const val = grid[r][c];
+  if (![0,1].includes(val)) return;
+  const group = findGroup(r, c);
+  if (group.length < 2) return;
+  group.forEach(([gr,gc]) => grid[gr][gc]=null);
+  score += group.length * 10;
+  scoreVal.textContent = score;
+  applyGravity();
+  render();
+}
+
+function render() {
+  game.innerHTML = "";
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const val = grid[r][c];
+      if (val === null) continue;
+      const cell = document.createElement('div');
+      cell.className = `cell val${val}`;
+      if ([0,1].includes(val)) cell.classList.add('special');
+      const x = c * (CELL_SIZE + 3) + 10;
+      const y = r * (CELL_SIZE + 3) + 10;
+      cell.style.left = x + 'px';
+      cell.style.top = y + 'px';
+      cell.textContent = val;
+      cell.addEventListener('click', () => smash(r,c));
+      game.appendChild(cell);
+    }
+  }
+
+  // Draw falling
+  if (falling) {
+    const f = document.createElement('div');
+    f.className = `cell val${falling.value}`;
+    if ([0,1].includes(falling.value)) f.classList.add('special');
+    f.textContent = falling.value;
+    f.style.left = (falling.col * (CELL_SIZE + 3) + 10) + 'px';
+    f.style.top = (falling.y + 10) + 'px';
+    game.appendChild(f);
+  }
+}
+
+function update() {
+  if (!gameOver && falling) {
+    falling.y += FALL_SPEED;
+    const row = Math.floor(falling.y / (CELL_SIZE + 3));
+    if (row >= ROWS - 1 || (row+1 < ROWS && grid[row+1][falling.col] !== null)) {
+      grid[row][falling.col] = falling.value;
+      falling = null;
+    }
+  }
+  render();
+  requestAnimationFrame(update);
+}
+
+setInterval(() => {
+  if (!falling && !gameOver) spawnNumber();
+}, SPAWN_INTERVAL);
+
+update();
+render();
+</script>
+
+</body>
+</html>
